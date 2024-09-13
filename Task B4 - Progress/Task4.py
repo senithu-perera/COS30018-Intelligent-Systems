@@ -134,9 +134,6 @@ def create_sequences(data, n_steps):
 
 # Iterative prediction logic
 def iterative_predict(model, data, n_steps, future_steps):
-    """
-    Predict prices iteratively one step at a time, using previous predictions as inputs.
-    """
     # Retrieve the last 'n_steps' from the test set (ensure the correct column is used)
     last_sequence = data['test']['Adj Close'].values[-n_steps:]  # Use the correct column name
 
@@ -166,10 +163,6 @@ def iterative_predict(model, data, n_steps, future_steps):
     return predictions
 
 def get_final_df(model, data, n_steps, look_ahead=LOOKUP_STEP):
-    """
-    Construct a final DataFrame that includes the features along
-    with true and predicted prices of the testing dataset.
-    """
     # Prepare the test data
     X_test = data["test"]['Adj Close'].values
     X_test = np.array([X_test[i:i + n_steps] for i in range(len(X_test) - n_steps)])
