@@ -133,27 +133,22 @@ def multistep_predict(model, data, n_steps, k):
 
     return predictions
 
-# Train ARIMA model
 def train_arima_model(train_data, order=(5,1,0), seasonal_order=(0,0,0,0)):
     arima_model = sm.tsa.statespace.SARIMAX(train_data, order=order, seasonal_order=seasonal_order, enforce_stationarity=False, enforce_invertibility=False)
     arima_result = arima_model.fit(disp=False)
     return arima_result
 
-# ARIMA multistep prediction
-def arima_multistep_predict(arima_model, start, end):
+def arima_predict(arima_model, start, end):
     predictions = arima_model.predict(start=start, end=end, dynamic=True)
     return predictions
 
-# Combine ARIMA and LSTM predictions
 def ensemble_predictions(lstm_preds, arima_preds, weight_lstm=0.5, weight_arima=0.5):
     combined_preds = (weight_lstm * lstm_preds) + (weight_arima * arima_preds)
     return combined_preds
 
-# Calculate RMSE
 def calculate_rmse(true_values, predicted_values):
     return math.sqrt(mean_squared_error(true_values, predicted_values))
 
-# Get final DataFrame
 def get_final_df(model, data, n_steps, look_ahead=LOOKUP_STEP):
     X_test = data["test"][FEATURE_COLUMNS].values
     X_test = np.array([X_test[i:i + n_steps] for i in range(len(X_test) - n_steps)])
@@ -173,7 +168,6 @@ def get_final_df(model, data, n_steps, look_ahead=LOOKUP_STEP):
     test_df[f"true_adjclose_{look_ahead}"] = y_test
     return test_df
 
-# Plotting function
 def plot_graph(test_df):
     plt.plot(test_df[f'true_adjclose_{LOOKUP_STEP}'], c='b')
     plt.plot(test_df[f'adjclose_{LOOKUP_STEP}'], c='r')
@@ -183,19 +177,16 @@ def plot_graph(test_df):
     plt.legend(["Actual Price", "LSTM Predicted", "Ensemble Predicted"])
     plt.show()
 
-# Load and process data
 data, scalers = load_and_process_data(ticker=ticker, start_date='2010-01-01', end_date='2020-01-01',
                                       handle_nan='fill', split_ratio=0.8, split_by_date=True, 
                                       scale=True, save_local=True, local_file=f'data/{ticker}_data.csv')
 
-# Create training and test datasets
 X_train, y_train = create_multivariate_sequences(data['train'], FEATURE_COLUMNS, N_STEPS)
 X_test, y_test = create_multivariate_sequences(data['test'], FEATURE_COLUMNS, N_STEPS)
 
 X_train = X_train.reshape((X_train.shape[0], X_train.shape[1], len(FEATURE_COLUMNS)))
 X_test = X_test.reshape((X_test.shape[0], X_test.shape[1], len(FEATURE_COLUMNS)))
 
-# Create LSTM model
 model = create_model(
     n_steps=N_STEPS,
     n_features=len(FEATURE_COLUMNS),
@@ -208,7 +199,6 @@ model = create_model(
     bidirectional=BIDIRECTIONAL
 )
 
-# Callbacks
 checkpoint_path = os.path.join("results", MODEL_NAME + ".keras")
 tensorboard_log_dir = os.path.join("logs", MODEL_NAME)
 
@@ -223,7 +213,6 @@ tensorboard = TensorBoard(
     log_dir=tensorboard_log_dir
 )
 
-# Train LSTM model
 history = model.fit(
     X_train, y_train,
     validation_data=(X_test, y_test),
@@ -233,13 +222,11 @@ history = model.fit(
     verbose=1
 )
 
-# Train ARIMA model
 train_adjclose = data['train']['Adj Close']
 arima_model = train_arima_model(train_adjclose)
 
-# Get ARIMA and LSTM predictions
 lstm_preds = multistep_predict(model, data, N_STEPS, LOOKUP_STEP)
-arima_preds = arima_multistep_predict(arima_model, start=len(train_adjclose), end=len(train_adjclose) + LOOKUP_STEP - 1)
+arima_preds = arima_predict(arima_model, start=len(train_adjclose), end=len(train_adjclose) + LOOKUP_STEP - 1)
 
 # Combine ARIMA and LSTM predictions
 combined_preds = ensemble_predictions(np.array(lstm_preds), np.array(arima_preds), weight_lstm=0.6, weight_arima=0.4)
@@ -248,12 +235,10 @@ combined_preds = ensemble_predictions(np.array(lstm_preds), np.array(arima_preds
 final_df = get_final_df(model, data, N_STEPS, LOOKUP_STEP)
 
 # Ensure the length of combined predictions matches the length of the relevant test data
-final_df[f'ensemble_adjclose_{LOOKUP_STEP}'] = np.nan  # Initialize the column with NaNs
+final_df[f'ensemble_adjclose_{LOOKUP_STEP}'] = np.nan
 
-# Place the combined predictions in the last `LOOKUP_STEP` rows
 final_df.iloc[-LOOKUP_STEP:, final_df.columns.get_loc(f'ensemble_adjclose_{LOOKUP_STEP}')] = combined_preds
 
-# Drop rows where ensemble or true values are NaN
 rmse_df = final_df[[f'true_adjclose_{LOOKUP_STEP}', f'ensemble_adjclose_{LOOKUP_STEP}']].dropna()
 
 # Calculate RMSE for ensemble
